@@ -1,4 +1,4 @@
-module github.com/Plopmenz/coredns-directdns
+module github.com/plopmenz/coredns-directdns
 
 go 1.25.7
 
