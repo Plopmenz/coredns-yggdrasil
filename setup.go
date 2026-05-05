@@ -19,14 +19,14 @@ func setup(c *caddy.Controller) error {
         }
         for _, zone := range args {
             normalized := dns.Fqdn(zone)
-            log.Infof("[directdns] adding zone: %s (from %s)", normalized, zone)
+            log.Debugf("[directdns] adding zone: %s (from %s)", normalized, zone)
             d.Zones = append(d.Zones, normalized)
         }
     }
 
     dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
         d.Next = next
-        log.Infof("[directdns] plugin instance created, Next is nil: %v", next == nil)
+        log.Debugf("[directdns] plugin instance created, Next is nil: %v", next == nil)
         return d
     })
 

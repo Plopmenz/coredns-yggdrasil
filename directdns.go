@@ -35,34 +35,34 @@ func (directdns *DirectDNS) Name() string { return "directdns" }
 func (directdns *DirectDNS) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
     state := request.Request{W: w, Req: r}
     queryName := state.Name()
-    log.Infof("[directdns] ServeDNS: query=%s, zones=%v", queryName, directdns.Zones)
+    log.Debugf("[directdns] ServeDNS: query=%s, zones=%v", queryName, directdns.Zones)
 
     zone := directdns.matchZone(queryName)
     if zone != "" {
-        log.Infof("[directdns] direct match: query=%s, zone=%s", queryName, zone)
+        log.Debugf("[directdns] direct match: query=%s, zone=%s", queryName, zone)
         return directdns.handleDirectQuery(ctx, r, w, zone, queryName)
     }
 
-    log.Infof("[directdns] no direct match, trying indirect for: %s", queryName)
+    log.Debugf("[directdns] no direct match, trying indirect for: %s", queryName)
     return directdns.handleIndirectQuery(ctx, w, r)
 }
 
 func (directdns *DirectDNS) handleDirectQuery(ctx context.Context, r *dns.Msg, w dns.ResponseWriter, zone, queryName string) (int, error) {
-    log.Infof("[directdns] handleDirectQuery: query=%s, zone=%s", queryName, zone)
+    log.Debugf("[directdns] handleDirectQuery: query=%s, zone=%s", queryName, zone)
     subdomain := trimZone(queryName, zone)
-    log.Infof("[directdns] subdomain: %q", subdomain)
+    log.Debugf("[directdns] subdomain: %q", subdomain)
     if subdomain == "" {
         return plugin.NextOrFailure(directdns.Name(), directdns.Next, ctx, w, r)
     }
     ipv6 := decodeIPv6(subdomain)
-    log.Infof("[directdns] decoded IPv6: %s", ipv6)
+    log.Debugf("[directdns] decoded IPv6: %s", ipv6)
     if ipv6 == "" {
         return plugin.NextOrFailure(directdns.Name(), directdns.Next, ctx, w, r)
     }
 
     resp, err := forwardToNode(r, ipv6)
     if err != nil || resp == nil {
-        log.Infof("[directdns] forward failed: %v, falling back", err)
+        log.Debugf("[directdns] forward failed: %v, falling back", err)
         return plugin.NextOrFailure(directdns.Name(), directdns.Next, ctx, w, r)
     }
 
@@ -73,28 +73,28 @@ func (directdns *DirectDNS) handleDirectQuery(ctx context.Context, r *dns.Msg, w
 }
 
 func (directdns *DirectDNS) handleIndirectQuery(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-    log.Infof("[directdns] handleIndirectQuery called")
+    log.Debugf("[directdns] handleIndirectQuery called")
     if directdns.Next == nil {
-        log.Infof("[directdns] Next is nil, returning")
+        log.Debugf("[directdns] Next is nil, returning")
         return plugin.NextOrFailure(directdns.Name(), directdns.Next, ctx, w, r)
     }
 
     cw := &captureWriter{ResponseWriter: w}
     rcode, err := directdns.Next.ServeDNS(ctx, cw, r)
     if err != nil {
-        log.Infof("[directdns] Next returned error: %v", err)
+        log.Debugf("[directdns] Next returned error: %v", err)
         return rcode, err
     }
     resp := cw.msg
     if resp == nil {
-        log.Infof("[directdns] Next returned nil response")
+        log.Debugf("[directdns] Next returned nil response")
         return rcode, nil
     }
 
-    log.Infof("[directdns] indirect response answer: %v", resp.Answer)
+    log.Debugf("[directdns] indirect response answer: %v", resp.Answer)
     newAnswer, modified := directdns.rewriteCNAMEs(resp, r)
     if modified {
-        log.Infof("[directdns] CNAME rewritten, new answer: %v", newAnswer)
+        log.Debugf("[directdns] CNAME rewritten, new answer: %v", newAnswer)
         newResp := new(dns.Msg)
         newResp.SetReply(r)
         newResp.Authoritative = resp.Authoritative
@@ -106,7 +106,7 @@ func (directdns *DirectDNS) handleIndirectQuery(ctx context.Context, w dns.Respo
         return dns.RcodeSuccess, nil
     }
 
-    log.Infof("[directdns] no CNAME rewrite, passing through")
+    log.Debugf("[directdns] no CNAME rewrite, passing through")
     w.WriteMsg(resp)
     return rcode, nil
 }
@@ -125,24 +125,24 @@ func (directdns *DirectDNS) rewriteCNAMEs(originalResp *dns.Msg, r *dns.Msg) ([]
             continue
         }
 
-        log.Infof("[directdns] checking CNAME target: %s", cname.Target)
+        log.Debugf("[directdns] checking CNAME target: %s", cname.Target)
         targetZone := directdns.matchZone(cname.Target)
         if targetZone == "" {
-            log.Infof("[directdns] CNAME target not in our zones")
+            log.Debugf("[directdns] CNAME target not in our zones")
             continue
         }
 
         subdomain := trimZone(cname.Target, targetZone)
         ipv6 := decodeIPv6(subdomain)
         if ipv6 == "" {
-            log.Infof("[directdns] could not decode IPv6 from subdomain: %s", subdomain)
+            log.Debugf("[directdns] could not decode IPv6 from subdomain: %s", subdomain)
             continue
         }
 
-        log.Infof("[directdns] querying IPv6 %s for CNAME target %s", ipv6, cname.Target)
+        log.Debugf("[directdns] querying IPv6 %s for CNAME target %s", ipv6, cname.Target)
         ipv6Resp, err := forwardToNodeWithName(r, ipv6, cname.Target)
         if err != nil || ipv6Resp == nil {
-            log.Infof("[directdns] IPv6 query failed: %v", err)
+            log.Debugf("[directdns] IPv6 query failed: %v", err)
             continue
         }
 
